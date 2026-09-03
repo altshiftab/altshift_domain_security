@@ -1,0 +1,7 @@
+.idea/
+.claude/
+
+# Build outputs. `go build ./...` in a module holding main packages drops the
+# binaries in the working directory, named after their package.
+/altshift_domain_security
+*.test
