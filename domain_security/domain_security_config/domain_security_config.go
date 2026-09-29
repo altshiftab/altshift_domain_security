@@ -2,6 +2,7 @@
 package domain_security_config
 
 import (
+	"context"
 	"net"
 
 	dnsUtilsClient "github.com/Motmedel/dns_utils/pkg/types/client"
@@ -30,8 +31,15 @@ var DefaultDkimSelectors = []string{
 
 type Option func(*Config)
 
+// StatusReader reads the states a registry records a domain in. *registration.Checker satisfies it.
+type StatusReader interface {
+	Statuses(ctx context.Context, domain string) ([]string, error)
+}
+
 type Config struct {
 	DnsClient *dnsUtilsClient.Client
+	// StatusReader is where the registration locks are read. Nil is an RDAP checker of its own.
+	StatusReader StatusReader
 	// AllowedNetworks are the networks the domain's owner acknowledges sending
 	// from. An SPF record authorising anything outside them is reported.
 	// Leaving it empty disables the check rather than failing everything.
@@ -63,6 +71,12 @@ func WithDnsClient(dnsClient *dnsUtilsClient.Client) Option {
 func WithAllowedNetworks(allowedNetworks ...*net.IPNet) Option {
 	return func(config *Config) {
 		config.AllowedNetworks = allowedNetworks
+	}
+}
+
+func WithStatusReader(statusReader StatusReader) Option {
+	return func(config *Config) {
+		config.StatusReader = statusReader
 	}
 }
 

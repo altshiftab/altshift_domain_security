@@ -17,7 +17,6 @@ import (
 	dnsUtilsErrors "github.com/Motmedel/dns_utils/pkg/errors"
 	dnsUtilsTypes "github.com/Motmedel/dns_utils/pkg/types"
 	dnsUtilsClient "github.com/Motmedel/dns_utils/pkg/types/client"
-	"github.com/Motmedel/whois/pkg/whois"
 	"github.com/altshiftab/altshift_domain_security/domain_security/domain_security_config"
 	"github.com/altshiftab/altshift_domain_security/pkg/dkim"
 	"github.com/altshiftab/altshift_domain_security/pkg/dmarc"
@@ -28,6 +27,7 @@ import (
 	domainTypes "github.com/altshiftab/altshift_domain_security/types/domain"
 	problemTypes "github.com/altshiftab/altshift_domain_security/types/problem"
 	spfTypes "github.com/altshiftab/altshift_domain_security/types/spf"
+	"github.com/altshiftab/altshift_domain_tools/pkg/registration"
 	altshiftContext "github.com/altshiftab/utils_go/pkg/context"
 	altshiftDmarc "github.com/altshiftab/utils_go/pkg/dns/dmarc"
 	altshiftSpf "github.com/altshiftab/utils_go/pkg/dns/spf"
@@ -285,6 +285,25 @@ func GetDomainSpfSecurity(
 // The blocks are gathered concurrently and each carries its own observation
 // time, because they do not complete together. DNSSEC and WHOIS are only asked
 // about for a registered domain: a subdomain has neither of its own.
+// defaultStatusReader is shared by every assessment, so that the list of registries' RDAP servers is
+// read once rather than once per domain.
+var defaultStatusReader = registration.NewChecker()
+
+// lockStates is which of the registration's lock states the domain is in, keyed by the EPP code in
+// lower case. Registries write them as RDAP maps them ("client transfer prohibited") or as the EPP
+// codes themselves ("clientTransferProhibited"), in either case and sometimes with the ICANN URL
+// appended, so each is reduced to its letters before it is compared.
+func lockStates(statuses []string) map[string]bool {
+	states := make(map[string]bool, len(statuses))
+	for _, status := range statuses {
+		code, _, _ := strings.Cut(strings.TrimSpace(status), " http")
+		code = strings.ToLower(strings.ReplaceAll(code, " ", ""))
+		states[code] = true
+	}
+
+	return states
+}
+
 func GetDomainSecurity(
 	ctx context.Context,
 	domain string,
@@ -310,6 +329,11 @@ func GetDomainSecurity(
 		return nil, altshiftErrors.NewWithTrace(nil_error.New("domain parts"), domain)
 	}
 
+	var statusReader domain_security_config.StatusReader = defaultStatusReader
+	if configured := config.StatusReader; !altshiftUtils.IsNil(configured) {
+		statusReader = configured
+	}
+
 	allowedNetworkRanger, err := newNetworkRanger(config.AllowedNetworks)
 	if err != nil {
 		return nil, fmt.Errorf("new network ranger: %w", err)
@@ -330,19 +354,19 @@ func GetDomainSecurity(
 
 		errGroup.Go(
 			func() error {
-				// WHOIS is the one source here that is neither authenticated
-				// nor reliably available, so a failure downgrades the answer
-				// rather than failing the assessment.
+				// The registry is the one source here that is neither authenticated nor reliably
+				// available -- and some registries, .se's among them, run no RDAP server -- so a
+				// failure downgrades the answer rather than failing the assessment.
 				lastObserved := time.Now()
 
-				whoisData, err := whois.Query(errGroupCtx, domain)
+				statuses, err := statusReader.Statuses(errGroupCtx, domain)
 				if err != nil {
 					slog.WarnContext(
 						altshiftContext.WithError(
 							errGroupCtx,
-							altshiftErrors.New(fmt.Errorf("whois query: %w", err), domain),
+							altshiftErrors.New(fmt.Errorf("statuses: %w", err), domain),
 						),
-						"An error occurred when querying WHOIS. Continuing without WHOIS data.",
+						"The registration's states could not be read. Continuing without them.",
 					)
 
 					return nil
@@ -352,54 +376,16 @@ func GetDomainSecurity(
 					Observation: domainTypes.NewObservation(lastObserved),
 				}
 
-				if len(whoisData) == 0 {
-					return nil
-				}
-
-				parsedWhoisData, err := whois.Parse(whoisData)
-				if err != nil {
-					slog.WarnContext(
-						altshiftContext.WithError(
-							errGroupCtx,
-							altshiftErrors.New(fmt.Errorf("whois parse: %w", err), whoisData),
-						),
-						"An error occurred when parsing WHOIS data. Continuing with observed WHOIS metadata.",
-					)
-
-					return nil
-				}
-
-				// The locks are reported as false rather than left unset once
-				// the record has been read: "the registry does not hold this
-				// lock" is an answer, and distinct from not having looked.
-				var serverTransferProhibited bool
-				var serverUpdateProhibited bool
-				var serverDeleteProhibited bool
-				var clientTransferProhibited bool
-				var clientUpdateProhibited bool
-				var clientDeleteProhibited bool
-
-				if parsedDomain := parsedWhoisData.Domain; parsedDomain != nil {
-					for _, status := range parsedDomain.Status {
-						// Registries and registrars are inconsistent about the
-						// case they publish these in, and some append the ICANN
-						// URL to the code.
-						switch {
-						case strings.EqualFold(status, "serverTransferProhibited"):
-							serverTransferProhibited = true
-						case strings.EqualFold(status, "serverUpdateProhibited"):
-							serverUpdateProhibited = true
-						case strings.EqualFold(status, "serverDeleteProhibited"):
-							serverDeleteProhibited = true
-						case strings.EqualFold(status, "clientTransferProhibited"):
-							clientTransferProhibited = true
-						case strings.EqualFold(status, "clientUpdateProhibited"):
-							clientUpdateProhibited = true
-						case strings.EqualFold(status, "clientDeleteProhibited"):
-							clientDeleteProhibited = true
-						}
-					}
-				}
+				// The locks are reported as false rather than left unset once the states have been
+				// read: "the registry does not hold this lock" is an answer, and distinct from not
+				// having looked.
+				locks := lockStates(statuses)
+				serverTransferProhibited := locks["servertransferprohibited"]
+				serverUpdateProhibited := locks["serverupdateprohibited"]
+				serverDeleteProhibited := locks["serverdeleteprohibited"]
+				clientTransferProhibited := locks["clienttransferprohibited"]
+				clientUpdateProhibited := locks["clientupdateprohibited"]
+				clientDeleteProhibited := locks["clientdeleteprohibited"]
 
 				domainMetadata.WhoisData.ServerTransferProhibited = &serverTransferProhibited
 				domainMetadata.WhoisData.ServerUpdateProhibited = &serverUpdateProhibited

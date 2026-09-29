@@ -2,6 +2,7 @@ package domain_security
 
 import (
 	"context"
+	"errors"
 	"net"
 	"slices"
 	"sort"
@@ -439,9 +440,9 @@ func TestGetDomainSecurity_Guards(t *testing.T) {
 	}
 }
 
-// A subdomain is assessed without the DNSSEC and WHOIS lookups, which belong to
-// a registered domain, so this exercises the whole gather without reaching the
-// network for WHOIS.
+// A subdomain is assessed without the DNSSEC and registration lookups, which
+// belong to a registered domain, so this exercises the whole gather without
+// reaching a registry.
 func TestGetDomainSecurity_Subdomain(t *testing.T) {
 	t.Parallel()
 
@@ -759,5 +760,114 @@ func TestGatherDnssec_NilDnsClient(t *testing.T) {
 
 	if dnssecData := gatherDnssec(t.Context(), "example.com", nil); dnssecData != nil {
 		t.Errorf("gatherDnssec() = %+v, want nil", dnssecData)
+	}
+}
+
+type fakeStatusReader struct {
+	statuses []string
+	err      error
+}
+
+func (fake *fakeStatusReader) Statuses(_ context.Context, _ string) ([]string, error) {
+	return fake.statuses, fake.err
+}
+
+func TestLockStates(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name     string
+		statuses []string
+		expected []string
+	}{
+		{name: "as RDAP writes them", statuses: []string{"client transfer prohibited", "server update prohibited"}, expected: []string{"clienttransferprohibited", "serverupdateprohibited"}},
+		{name: "as EPP codes", statuses: []string{"clientDeleteProhibited"}, expected: []string{"clientdeleteprohibited"}},
+		{name: "with the ICANN URL", statuses: []string{"serverTransferProhibited https://icann.org/epp#serverTransferProhibited"}, expected: []string{"servertransferprohibited"}},
+		{name: "none", statuses: nil, expected: nil},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			states := lockStates(testCase.statuses)
+			for _, code := range testCase.expected {
+				if !states[code] {
+					t.Errorf("expected %s among %v", code, states)
+				}
+			}
+			if len(states) != len(testCase.expected) {
+				t.Errorf("got %v, expected exactly %v", states, testCase.expected)
+			}
+		})
+	}
+}
+
+// TestGetDomainSecurity_Locks holds that a registered domain's locks come from what the registry
+// says, and that a registry that cannot be read leaves them unknown rather than failing the rest.
+func TestGetDomainSecurity_Locks(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name      string
+		reader    *fakeStatusReader
+		expectNil bool
+		transfer  bool
+		delete    bool
+	}{
+		{
+			name:     "the registry's states",
+			reader:   &fakeStatusReader{statuses: []string{"active", "client transfer prohibited", "serverDeleteProhibited"}},
+			transfer: true,
+			delete:   true,
+		},
+		{
+			name:      "a registry with no RDAP server",
+			reader:    &fakeStatusReader{err: errors.New("no rdap")}, //nolint:err113 // a stub's failure.
+			expectNil: true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := newFakeDNS(t, map[string][]string{
+				"example.com.":        {"v=spf1 -all"},
+				"_dmarc.example.com.": {"v=DMARC1; p=reject"},
+			})
+
+			metadata, err := GetDomainSecurity(
+				context.Background(),
+				"example.com",
+				domain_security_config.WithDnsClient(fake.client()),
+				domain_security_config.WithStatusReader(testCase.reader),
+			)
+			if err != nil {
+				t.Fatalf("GetDomainSecurity() = %v, want nil", err)
+			}
+			if metadata == nil {
+				t.Fatal("GetDomainSecurity() = nil, want metadata")
+			}
+
+			whoisData := metadata.WhoisData
+			if testCase.expectNil {
+				if whoisData != nil {
+					t.Errorf("expected no lock data, got %+v", whoisData)
+				}
+				return
+			}
+
+			if whoisData == nil || whoisData.ClientTransferProhibited == nil || whoisData.ServerDeleteProhibited == nil ||
+				whoisData.ClientUpdateProhibited == nil {
+				t.Fatalf("expected every lock known, got %+v", whoisData)
+			}
+			if *whoisData.ClientTransferProhibited != testCase.transfer || *whoisData.ServerDeleteProhibited != testCase.delete {
+				t.Errorf("got transfer %v delete %v", *whoisData.ClientTransferProhibited, *whoisData.ServerDeleteProhibited)
+			}
+			if *whoisData.ClientUpdateProhibited {
+				t.Error("expected an unrecorded lock reported as not held")
+			}
+		})
 	}
 }

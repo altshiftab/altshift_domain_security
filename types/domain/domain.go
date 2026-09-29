@@ -119,7 +119,8 @@ type DnssecData struct {
 }
 
 // WhoisData records the EPP status codes that lock a domain against being moved
-// or removed. They come in pairs: the server* codes are set by the registry and
+// or removed, as its registry states them over RDAP. The name is the whois
+// record they were once read from, kept so that stored assessments still read. They come in pairs: the server* codes are set by the registry and
 // are usually a paid service, while the client* codes are set by the registrar
 // and are what most domains are actually protected by. Reading only one half
 // would report a fully locked domain as unlocked.
