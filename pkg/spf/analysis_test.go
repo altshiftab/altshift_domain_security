@@ -17,8 +17,7 @@ import (
 	problemTypes "github.com/altshiftab/altshift_domain_security/types/problem"
 	spfTypes "github.com/altshiftab/altshift_domain_security/types/spf"
 	altshiftSpf "github.com/altshiftab/utils_go/pkg/dns/spf"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
+	altshiftTestingCmp "github.com/altshiftab/utils_go/pkg/testing/cmp"
 	"github.com/miekg/dns"
 )
 
@@ -303,7 +302,7 @@ func TestAnalyzeRecord_TableDriven(t *testing.T) {
 			wantIds := append([]string(nil), tc.wantProblemIds...)
 			sort.Strings(wantIds)
 
-			if diff := cmp.Diff(wantIds, gotIds, cmpopts.EquateEmpty()); diff != "" {
+			if diff := altshiftTestingCmp.Diff(wantIds, gotIds, altshiftTestingCmp.EquateEmpty()); diff != "" {
 				t.Fatalf("problem ids mismatch (-want +got):\n%s", diff)
 			}
 			if lookupCount != tc.wantLookupCount {

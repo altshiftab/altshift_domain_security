@@ -6,7 +6,6 @@ require (
 	github.com/Motmedel/dns_utils v0.0.58
 	github.com/altshiftab/altshift_domain_tools v1.11.0
 	github.com/altshiftab/utils_go v1.72.0
-	github.com/google/go-cmp v0.6.0
 	github.com/miekg/dns v1.1.72
 	github.com/yl2chen/cidranger v1.0.2
 	golang.org/x/sync v0.22.0

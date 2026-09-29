@@ -8,7 +8,7 @@ import (
 	problemTypes "github.com/altshiftab/altshift_domain_security/types/problem"
 	altshiftDkim "github.com/altshiftab/utils_go/pkg/dns/dkim"
 	altshiftErrors "github.com/altshiftab/utils_go/pkg/errors"
-	"github.com/google/go-cmp/cmp"
+	altshiftTestingCmp "github.com/altshiftab/utils_go/pkg/testing/cmp"
 )
 
 func TestAnalyze(t *testing.T) {
@@ -93,7 +93,7 @@ func TestAnalyze(t *testing.T) {
 			}
 
 			expected := testCase.expected
-			if diff := cmp.Diff(expected, dkimRecord); diff != "" {
+			if diff := altshiftTestingCmp.Diff(expected, dkimRecord); diff != "" {
 				t.Fatalf("struct mismatch (-expected +got):\n%s", diff)
 			}
 		})
