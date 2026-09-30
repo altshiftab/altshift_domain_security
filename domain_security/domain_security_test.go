@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/netip"
 	"slices"
 	"sort"
 	"strings"
@@ -177,38 +178,47 @@ func TestObservedAt(t *testing.T) {
 	})
 }
 
-func TestNewNetworkRanger(t *testing.T) {
+func TestNetworkPrefix(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
 		name     string
-		networks []*net.IPNet
-		probe    string
-		expected bool
+		network  *net.IPNet
+		expected string
 	}{
+		{name: "nil", network: nil},
+		{name: "ipv4", network: mustParseCidr(t, "192.0.2.0/24"), expected: "192.0.2.0/24"},
+		{name: "ipv6", network: mustParseCidr(t, "2001:db8::/32"), expected: "2001:db8::/32"},
 		{
-			name:     "an empty ranger contains nothing",
-			networks: nil,
-			probe:    "192.0.2.1",
-			expected: false,
+			name:     "a 16-byte ipv4 address with a 32-bit mask",
+			network:  &net.IPNet{IP: net.IPv4(192, 0, 2, 0), Mask: net.CIDRMask(24, 32)},
+			expected: "192.0.2.0/24",
 		},
 		{
-			name:     "an address inside the range is contained",
-			networks: []*net.IPNet{mustParseCidr(t, "192.0.2.0/24")},
-			probe:    "192.0.2.1",
-			expected: true,
+			name:     "a 16-byte ipv4 address with a 128-bit mask",
+			network:  &net.IPNet{IP: net.IPv4(192, 0, 2, 0), Mask: net.CIDRMask(120, 128)},
+			expected: "192.0.2.0/24",
 		},
 		{
-			name:     "an address outside the range is not",
-			networks: []*net.IPNet{mustParseCidr(t, "192.0.2.0/24")},
-			probe:    "198.51.100.1",
-			expected: false,
+			name:     "host bits are masked off",
+			network:  &net.IPNet{IP: net.ParseIP("192.0.2.9").To4(), Mask: net.CIDRMask(24, 32)},
+			expected: "192.0.2.0/24",
 		},
 		{
-			name:     "nil entries are skipped rather than failing",
-			networks: []*net.IPNet{nil, mustParseCidr(t, "192.0.2.0/24")},
-			probe:    "192.0.2.9",
-			expected: true,
+			name:    "a 16-byte ipv4 address with too short a 128-bit mask",
+			network: &net.IPNet{IP: net.IPv4(192, 0, 2, 0), Mask: net.CIDRMask(64, 128)},
+		},
+		{
+			name:    "an ipv6 address with a 32-bit mask",
+			network: &net.IPNet{IP: net.ParseIP("2001:db8::"), Mask: net.CIDRMask(24, 32)},
+		},
+		{
+			name:    "a non-canonical mask",
+			network: &net.IPNet{IP: net.ParseIP("192.0.2.0").To4(), Mask: net.IPv4Mask(255, 0, 255, 0)},
+		},
+		{
+			name:    "an address of no length",
+			network: &net.IPNet{Mask: net.CIDRMask(24, 32)},
 		},
 	}
 
@@ -216,18 +226,66 @@ func TestNewNetworkRanger(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			ranger, err := newNetworkRanger(testCase.networks)
-			if err != nil {
-				t.Fatalf("newNetworkRanger() = %v, want nil", err)
+			prefix, ok := networkPrefix(testCase.network)
+			if testCase.expected == "" {
+				if ok {
+					t.Fatalf("networkPrefix() = %v, want none", prefix)
+				}
+				return
+			}
+			if !ok {
+				t.Fatalf("networkPrefix() reported none, want %s", testCase.expected)
 			}
 
-			contains, err := ranger.Contains(net.ParseIP(testCase.probe))
-			if err != nil {
-				t.Fatalf("ranger contains: %v", err)
+			if got := prefix.String(); got != testCase.expected {
+				t.Errorf("networkPrefix() = %s, want %s", got, testCase.expected)
+			}
+		})
+	}
+}
+
+func TestNetworkCovered(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name     string
+		allowed  []string
+		observed string
+		expected bool
+	}{
+		{name: "nothing allowed covers nothing", allowed: nil, observed: "192.0.2.0/24", expected: false},
+		{name: "an equal network", allowed: []string{"192.0.2.0/24"}, observed: "192.0.2.0/24", expected: true},
+		{name: "a narrower network inside", allowed: []string{"192.0.2.0/24"}, observed: "192.0.2.128/25", expected: true},
+		{name: "a single address inside", allowed: []string{"192.0.2.0/24"}, observed: "192.0.2.9/32", expected: true},
+		{name: "a network outside", allowed: []string{"192.0.2.0/24"}, observed: "198.51.100.0/24", expected: false},
+		{
+			name:     "a wider network sharing its first address",
+			allowed:  []string{"10.0.0.0/24"},
+			observed: "10.0.0.0/8",
+			expected: false,
+		},
+		{
+			name:     "any one allowed network is enough",
+			allowed:  []string{"192.0.2.0/24", "10.0.0.0/8"},
+			observed: "10.1.0.0/16",
+			expected: true,
+		},
+		{name: "ipv6 inside", allowed: []string{"2001:db8::/32"}, observed: "2001:db8:1::/48", expected: true},
+		{name: "families do not mix", allowed: []string{"::/0"}, observed: "192.0.2.0/24", expected: false},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			allowed := make([]netip.Prefix, 0, len(testCase.allowed))
+			for _, allowedPrefix := range testCase.allowed {
+				allowed = append(allowed, netip.MustParsePrefix(allowedPrefix))
 			}
 
-			if contains != testCase.expected {
-				t.Errorf("Contains(%s) = %v, want %v", testCase.probe, contains, testCase.expected)
+			observed := netip.MustParsePrefix(testCase.observed)
+			if got := networkCovered(allowed, observed); got != testCase.expected {
+				t.Errorf("networkCovered(%v, %s) = %v, want %v", testCase.allowed, observed, got, testCase.expected)
 			}
 		})
 	}
@@ -279,6 +337,17 @@ func TestAddUnacknowledgedNetworkProblems(t *testing.T) {
 			expectedDetails: []string{"198.51.100.0/24", "203.0.113.0/24"},
 		},
 		{
+			name:            "a wider network starting inside the list is reported",
+			records:         recordWithNetworks("v=spf1 ip4:10.0.0.0/8 -all"),
+			allowedNetworks: []*net.IPNet{mustParseCidr(t, "10.0.0.0/24")},
+			expectedDetails: []string{"10.0.0.0/8"},
+		},
+		{
+			name:            "a narrower network inside the list is not reported",
+			records:         recordWithNetworks("v=spf1 ip4:192.0.2.9 -all"),
+			allowedNetworks: []*net.IPNet{mustParseCidr(t, "192.0.2.0/24")},
+		},
+		{
 			name:            "a record that is absent is a no-op",
 			records:         []*spfTypes.TracedRecordWithProblems{{DomainTrace: []string{"example.com"}}},
 			allowedNetworks: []*net.IPNet{mustParseCidr(t, "192.0.2.0/24")},
@@ -289,12 +358,7 @@ func TestAddUnacknowledgedNetworkProblems(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			ranger, err := newNetworkRanger(testCase.allowedNetworks)
-			if err != nil {
-				t.Fatalf("newNetworkRanger() = %v, want nil", err)
-			}
-
-			if err := addUnacknowledgedNetworkProblems(testCase.records, testCase.allowedNetworks, ranger); err != nil {
+			if err := addUnacknowledgedNetworkProblems(testCase.records, testCase.allowedNetworks); err != nil {
 				t.Fatalf("addUnacknowledgedNetworkProblems() = %v, want nil", err)
 			}
 

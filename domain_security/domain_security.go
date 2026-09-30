@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -35,7 +36,6 @@ import (
 	"github.com/altshiftab/utils_go/pkg/errors/types/nil_error"
 	"github.com/altshiftab/utils_go/pkg/net/types/domain_parts"
 	altshiftUtils "github.com/altshiftab/utils_go/pkg/utils"
-	"github.com/yl2chen/cidranger"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 )
@@ -60,22 +60,51 @@ func observedAt(ctx context.Context) (time.Time, error) {
 	return *lastObserved, nil
 }
 
-// newNetworkRanger indexes the acknowledged networks for containment checks.
-func newNetworkRanger(networks []*net.IPNet) (cidranger.Ranger, error) {
-	ranger := cidranger.NewPCTrieRanger()
+// networkPrefix converts network to a prefix whose address is unmapped, so an
+// IPv4 network compares equal however net stored it. It reports false for a
+// network whose address and mask do not describe a prefix.
+func networkPrefix(network *net.IPNet) (netip.Prefix, bool) {
+	if network == nil {
+		return netip.Prefix{}, false
+	}
 
-	for _, network := range networks {
-		if network == nil {
-			continue
+	address, ok := netip.AddrFromSlice(network.IP)
+	if !ok {
+		return netip.Prefix{}, false
+	}
+
+	ones, bits := network.Mask.Size()
+	if address.Is4In6() {
+		address = address.Unmap()
+		// A 16-byte IPv4 address may carry a 32-bit mask or a 128-bit one.
+		if bits == 128 {
+			ones, bits = ones-96, 32
 		}
+	}
+	if address.BitLen() != bits {
+		return netip.Prefix{}, false
+	}
 
-		entry := cidranger.NewBasicRangerEntry(*network)
-		if err := ranger.Insert(entry); err != nil {
-			return nil, altshiftErrors.NewWithTrace(fmt.Errorf("cidr ranger insert: %w", err), entry)
+	prefix := netip.PrefixFrom(address, ones)
+	if !prefix.IsValid() {
+		return netip.Prefix{}, false
+	}
+
+	return prefix.Masked(), true
+}
+
+// networkCovered reports whether every address of observed lies within one of
+// allowed. Containing only the observed network's first address is not
+// enough: an acknowledged /24 does not cover an authorised /8 that starts
+// inside it.
+func networkCovered(allowed []netip.Prefix, observed netip.Prefix) bool {
+	for _, allowedPrefix := range allowed {
+		if allowedPrefix.Bits() <= observed.Bits() && allowedPrefix.Contains(observed.Addr()) {
+			return true
 		}
 	}
 
-	return ranger, nil
+	return false
 }
 
 // gatherDnssec reports whether the zone is signed, or nil when that could not
@@ -334,11 +363,6 @@ func GetDomainSecurity(
 		statusReader = configured
 	}
 
-	allowedNetworkRanger, err := newNetworkRanger(config.AllowedNetworks)
-	if err != nil {
-		return nil, fmt.Errorf("new network ranger: %w", err)
-	}
-
 	domainMetadata := &domainTypes.Metadata{}
 
 	errGroup, errGroupCtx := errgroup.WithContext(ctx)
@@ -433,7 +457,7 @@ func GetDomainSecurity(
 				return fmt.Errorf("get domain spf security: %w", err)
 			}
 
-			if err := addUnacknowledgedNetworkProblems(tracedRecordWithProblems, config.AllowedNetworks, allowedNetworkRanger); err != nil {
+			if err := addUnacknowledgedNetworkProblems(tracedRecordWithProblems, config.AllowedNetworks); err != nil {
 				return fmt.Errorf("add unacknowledged network problems: %w", err)
 			}
 
@@ -486,14 +510,16 @@ func GetDomainSecurity(
 func addUnacknowledgedNetworkProblems(
 	tracedRecordsWithProblems []*spfTypes.TracedRecordWithProblems,
 	allowedNetworks []*net.IPNet,
-	ranger cidranger.Ranger,
 ) error {
 	if len(tracedRecordsWithProblems) == 0 || len(allowedNetworks) == 0 {
 		return nil
 	}
 
-	if ranger == nil {
-		return altshiftErrors.NewWithTrace(nil_error.New("ranger"))
+	allowedPrefixes := make([]netip.Prefix, 0, len(allowedNetworks))
+	for _, allowedNetwork := range allowedNetworks {
+		if allowedPrefix, ok := networkPrefix(allowedNetwork); ok {
+			allowedPrefixes = append(allowedPrefixes, allowedPrefix)
+		}
 	}
 
 	base := tracedRecordsWithProblems[0]
@@ -511,16 +537,9 @@ func addUnacknowledgedNetworkProblems(
 			continue
 		}
 
-		observedNetworkIpAddress := observedNetwork.IP
-
-		found, err := ranger.Contains(observedNetworkIpAddress)
-		if err != nil {
-			return altshiftErrors.NewWithTrace(
-				fmt.Errorf("cidr ranger contains: %w", err),
-				observedNetworkIpAddress,
-			)
-		}
-		if found {
+		// A network that is no prefix cannot be shown to be acknowledged, so it
+		// is reported rather than passed over.
+		if observedPrefix, ok := networkPrefix(observedNetwork); ok && networkCovered(allowedPrefixes, observedPrefix) {
 			continue
 		}
 
