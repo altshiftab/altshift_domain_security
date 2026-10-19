@@ -5,11 +5,13 @@ import (
 	problemTypes "github.com/altshiftab/altshift_domain_security/types/problem"
 )
 
+// RuleIdToTitle names each problem with the record it is about; see the SPF
+// table for why.
 var RuleIdToTitle = map[string]string{
-	rule_id.SyntaxError:          "The data does not constitute a syntactically valid record",
+	rule_id.SyntaxError:          "The DKIM record is not syntactically valid",
 	rule_id.MultipleRecords:      "Multiple DKIM records",
-	rule_id.TestingDkimFlag:      "Use of testing flag",
-	rule_id.TooSmallRsaKeyLength: "The length of the RSA public key is too small",
+	rule_id.TestingDkimFlag:      "The DKIM record has the testing flag set",
+	rule_id.TooSmallRsaKeyLength: "The RSA public key of the DKIM record is too short",
 }
 
 var RuleIdToDescription = map[string]string{
