@@ -11,7 +11,6 @@ import (
 	"strings"
 	"sync"
 
-	dnsUtilsClient "github.com/Motmedel/dns_utils/pkg/types/client"
 	"github.com/altshiftab/altshift_domain_security/domain_security"
 	"github.com/altshiftab/altshift_domain_security/domain_security/domain_security_config"
 	"github.com/altshiftab/altshift_domain_security/pkg/discovery"
@@ -19,6 +18,7 @@ import (
 	"github.com/altshiftab/altshift_domain_security/pkg/report"
 	domainTypes "github.com/altshiftab/altshift_domain_security/types/domain"
 	problemTypes "github.com/altshiftab/altshift_domain_security/types/problem"
+	dnsUtilsClient "github.com/altshiftab/dns_utils/pkg/types/client"
 	altshiftContext "github.com/altshiftab/utils_go/pkg/context"
 	altshiftErrors "github.com/altshiftab/utils_go/pkg/errors"
 	"github.com/altshiftab/utils_go/pkg/errors/types/nil_error"

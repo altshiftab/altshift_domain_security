@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"sync"
 
-	dnsUtilsContext "github.com/Motmedel/dns_utils/pkg/context"
-	dnsUtilsClient "github.com/Motmedel/dns_utils/pkg/types/client"
 	domainTypes "github.com/altshiftab/altshift_domain_security/types/domain"
+	dnsUtilsContext "github.com/altshiftab/dns_utils/pkg/context"
+	dnsUtilsClient "github.com/altshiftab/dns_utils/pkg/types/client"
 	altshiftContext "github.com/altshiftab/utils_go/pkg/context"
 	altshiftErrors "github.com/altshiftab/utils_go/pkg/errors"
 	"github.com/altshiftab/utils_go/pkg/errors/types/nil_error"

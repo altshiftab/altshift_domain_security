@@ -8,11 +8,11 @@ import (
 	"strings"
 	"sync"
 
-	dnsUtilsContext "github.com/Motmedel/dns_utils/pkg/context"
-	dnsUtilsClient "github.com/Motmedel/dns_utils/pkg/types/client"
 	"github.com/altshiftab/altshift_domain_security/pkg/dmarc/rule_id"
 	"github.com/altshiftab/altshift_domain_security/pkg/dmarc/rule_id_mappings"
 	problemTypes "github.com/altshiftab/altshift_domain_security/types/problem"
+	dnsUtilsContext "github.com/altshiftab/dns_utils/pkg/context"
+	dnsUtilsClient "github.com/altshiftab/dns_utils/pkg/types/client"
 	altshiftContext "github.com/altshiftab/utils_go/pkg/context"
 	altshiftDmarc "github.com/altshiftab/utils_go/pkg/dns/dmarc"
 	altshiftErrors "github.com/altshiftab/utils_go/pkg/errors"

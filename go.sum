@@ -1,7 +1,7 @@
-github.com/Motmedel/dns_utils v0.0.58 h1:S3xn1Y5UlLwKjwANy51iWhS0Wn3bU1WW0vy27ECV53c=
-github.com/Motmedel/dns_utils v0.0.58/go.mod h1:aXIEl547IWdHn5q2nqze+r3MlhaoPO97DxVMD33r4m4=
 github.com/altshiftab/altshift_domain_tools v1.11.0 h1:vMlHzBX034yixqyiFV+01UgZaz9Io+AuRPctNj8SRoU=
 github.com/altshiftab/altshift_domain_tools v1.11.0/go.mod h1:kCPQQxHwsm8o055gHE/mEaZ87JL1hM3/xi3Wso44m3U=
+github.com/altshiftab/dns_utils v0.1.0 h1:O7tc2aVBqSlIbxbOXM/qC4KGbE0b6TAtkLgFyERMHJI=
+github.com/altshiftab/dns_utils v0.1.0/go.mod h1:GsZ1KUsUoiPjCFunbg/5BvkNTcEq66iPm7lGPzQYx1k=
 github.com/altshiftab/utils_go v1.134.0 h1:ML6RYVlXBkZpOZSkKkCzmKyQNMboHs4ZZOpFQSYEWzo=
 github.com/altshiftab/utils_go v1.134.0/go.mod h1:lNBqVAWMIhIISNz0pOQnsqRsCPg6S50Q62GH6slGBOk=
 github.com/miekg/dns v1.1.73 h1:uhT8nJxmTrPJYClxVxTCX+CVn6qnzSiybRk72Z6DgrE=

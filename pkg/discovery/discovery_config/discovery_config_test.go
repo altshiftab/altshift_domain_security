@@ -3,7 +3,7 @@ package discovery_config
 import (
 	"testing"
 
-	dnsUtilsClient "github.com/Motmedel/dns_utils/pkg/types/client"
+	dnsUtilsClient "github.com/altshiftab/dns_utils/pkg/types/client"
 	"github.com/altshiftab/utils_go/pkg/http/types/fetch_config"
 )
 

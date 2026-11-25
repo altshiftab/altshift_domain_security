@@ -15,12 +15,12 @@ import (
 	"slices"
 	"sync"
 
-	dnsUtilsClient "github.com/Motmedel/dns_utils/pkg/types/client"
 	"github.com/altshiftab/altshift_domain_security/pkg/discovery/sources/hackertarget"
 	"github.com/altshiftab/altshift_domain_security/pkg/discovery/sources/whoisxml"
 	whoisXmlTypes "github.com/altshiftab/altshift_domain_security/pkg/discovery/sources/whoisxml/types"
 	domainTypes "github.com/altshiftab/altshift_domain_security/types/domain"
 	"github.com/altshiftab/altshift_domain_security/types/inference"
+	dnsUtilsClient "github.com/altshiftab/dns_utils/pkg/types/client"
 	altshiftErrors "github.com/altshiftab/utils_go/pkg/errors"
 	"github.com/altshiftab/utils_go/pkg/errors/types/empty_error"
 	"github.com/altshiftab/utils_go/pkg/errors/types/nil_error"

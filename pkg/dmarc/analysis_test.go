@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	dnsUtilsContext "github.com/Motmedel/dns_utils/pkg/context"
-	dnsUtilsErrors "github.com/Motmedel/dns_utils/pkg/errors"
-	dnsUtilsClient "github.com/Motmedel/dns_utils/pkg/types/client"
-	dnsUtilsClientConfig "github.com/Motmedel/dns_utils/pkg/types/client/config"
 	"github.com/altshiftab/altshift_domain_security/pkg/dmarc/rule_id"
 	"github.com/altshiftab/altshift_domain_security/pkg/dmarc/rule_id_mappings"
 	problemTypes "github.com/altshiftab/altshift_domain_security/types/problem"
+	dnsUtilsContext "github.com/altshiftab/dns_utils/pkg/context"
+	dnsUtilsErrors "github.com/altshiftab/dns_utils/pkg/errors"
+	dnsUtilsClient "github.com/altshiftab/dns_utils/pkg/types/client"
+	dnsUtilsClientConfig "github.com/altshiftab/dns_utils/pkg/types/client/config"
 	altshiftDmarc "github.com/altshiftab/utils_go/pkg/dns/dmarc"
 	"github.com/miekg/dns"
 )

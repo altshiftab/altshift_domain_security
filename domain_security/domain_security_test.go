@@ -12,14 +12,14 @@ import (
 	"testing"
 	"time"
 
-	dnsUtilsContext "github.com/Motmedel/dns_utils/pkg/context"
-	dnsUtilsClient "github.com/Motmedel/dns_utils/pkg/types/client"
-	dnsUtilsClientConfig "github.com/Motmedel/dns_utils/pkg/types/client/config"
 	"github.com/altshiftab/altshift_domain_security/domain_security/domain_security_config"
 	dmarcRuleId "github.com/altshiftab/altshift_domain_security/pkg/dmarc/rule_id"
 	spfRuleId "github.com/altshiftab/altshift_domain_security/pkg/spf/rule_id"
 	problemTypes "github.com/altshiftab/altshift_domain_security/types/problem"
 	spfTypes "github.com/altshiftab/altshift_domain_security/types/spf"
+	dnsUtilsContext "github.com/altshiftab/dns_utils/pkg/context"
+	dnsUtilsClient "github.com/altshiftab/dns_utils/pkg/types/client"
+	dnsUtilsClientConfig "github.com/altshiftab/dns_utils/pkg/types/client/config"
 	altshiftSpf "github.com/altshiftab/utils_go/pkg/dns/spf"
 	"github.com/miekg/dns"
 )

@@ -5,7 +5,7 @@ import (
 	"context"
 	"net"
 
-	dnsUtilsClient "github.com/Motmedel/dns_utils/pkg/types/client"
+	dnsUtilsClient "github.com/altshiftab/dns_utils/pkg/types/client"
 )
 
 // DefaultDkimSelectors is the short list of selectors an assessment probes when

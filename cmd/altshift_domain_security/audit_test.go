@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	dnsUtilsClient "github.com/Motmedel/dns_utils/pkg/types/client"
-	dnsUtilsClientConfig "github.com/Motmedel/dns_utils/pkg/types/client/config"
 	"github.com/altshiftab/altshift_domain_security/pkg/report"
 	domainTypes "github.com/altshiftab/altshift_domain_security/types/domain"
 	problemTypes "github.com/altshiftab/altshift_domain_security/types/problem"
+	dnsUtilsClient "github.com/altshiftab/dns_utils/pkg/types/client"
+	dnsUtilsClientConfig "github.com/altshiftab/dns_utils/pkg/types/client/config"
 	"github.com/miekg/dns"
 )
 

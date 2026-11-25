@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	dnsUtilsClient "github.com/Motmedel/dns_utils/pkg/types/client"
+	dnsUtilsClient "github.com/altshiftab/dns_utils/pkg/types/client"
 )
 
 func mustParseCidr(t *testing.T, cidr string) *net.IPNet {
